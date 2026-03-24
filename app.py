@@ -114,7 +114,7 @@ def manual_verification(code):
 
         if response.status_code == 200 and "Insertada verificación" in response.text:
             return code
-
+        
         return "ERROR_REGISTER_CHECK"
 
     except Timeout:
@@ -342,8 +342,6 @@ def window_read():
 
                 window.after(0, lambda: label.configure(text="Procesando..."))
 
-                time.sleep(2)
-
                 if "ERROR" in data:
                     window.after(
                         0, lambda d=data: label.configure(text=f"{d} ❌"))
@@ -353,6 +351,7 @@ def window_read():
                     logging.info("Response verification: %s", response)
 
                     if "ERROR" in response:
+                        time.sleep(2)
                         window.after(
                             0, lambda r=response: label.configure(text=f"{r} ❌"))
                         error_nfc()
@@ -360,7 +359,7 @@ def window_read():
                         window.after(
                             0, lambda d=data: label.configure(text=f"{d} ✅"))
 
-                time.sleep(1)
+                time.sleep(2)
 
                 if running:
                     window.after(0, lambda: label.configure(
