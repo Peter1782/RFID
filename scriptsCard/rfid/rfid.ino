@@ -14,6 +14,15 @@
 MFRC522 mfrc522(SS_PIN, RST_PIN);
 MFRC522::MIFARE_Key key;
 
+enum Mode {
+  IDLE,
+  READ_MODE,
+  WRITE_MODE
+};
+
+Mode currentMode = IDLE;
+char writeData[32];
+
 void setup() {
   Serial.begin(9600);
   SPI.begin(SCK_PIN, MISO_PIN, MOSI_PIN, SS_PIN);
@@ -61,6 +70,7 @@ void writeBlock(char* inputData) {
   if (status != MFRC522::STATUS_OK) {
     Serial.println("ERROR_AUTHENTICATION");
     beep(2);
+    currentMode = IDLE;
     return;
   }
 
@@ -76,7 +86,7 @@ void writeBlock(char* inputData) {
 
   mfrc522.PICC_HaltA();
   mfrc522.PCD_StopCrypto1();
-  delay(2000);
+  currentMode = IDLE;
 }
 
 void readBlock() {
@@ -100,6 +110,7 @@ void readBlock() {
   if (status != MFRC522::STATUS_OK) {
     Serial.println("ERROR_AUTHENTICATION");
     beep(2);
+    currentMode = IDLE;
     return;
   }
 
@@ -119,29 +130,41 @@ void readBlock() {
 
   mfrc522.PICC_HaltA();
   mfrc522.PCD_StopCrypto1();
-  delay(2000);
+  currentMode = IDLE;
 }
 
+void handleSerial() {
+  if (!Serial.available()) return;
+
+  String command = Serial.readStringUntil('\n');
+
+  if (command.startsWith("WRITE")) {
+    command.substring(6).toCharArray(writeData, 32);
+    currentMode = WRITE_MODE;
+  }
+  else if (command == "READ") {
+    currentMode = READ_MODE;
+  }
+  else if (command == "STOP") {
+    currentMode = IDLE;
+  }
+  else if (command == "ERROR") {
+    beep(2);
+  }
+  else if (command == "RESET") {
+    ESP.restart();
+  }
+}
 
 void loop() {
-  if (Serial.available()) {
+  handleSerial();
 
-    String command = Serial.readStringUntil('\n');
-
-    if (command.startsWith("WRITE")) {
-      char data[32];
-      command.substring(6).toCharArray(data, 32);
-      writeBlock(data);
-
-    } else if (command == "READ") {
-      readBlock();
-
-    }else if (command == "STARTED"){
-      beep(1);
-
-    }else if (command == "ERROR"){
-      beep(2);
-
-    }
+  if (currentMode == READ_MODE) {
+    readBlock();
   }
+  else if (currentMode == WRITE_MODE) {
+    writeBlock(writeData);
+  }
+
+  delay(5);
 }

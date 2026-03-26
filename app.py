@@ -31,6 +31,7 @@ arduino = serial.Serial('/dev/ttyUSB0', 9600, timeout=1)
 time.sleep(2)
 running = False
 arduino_lock = threading.Lock()
+logging.info("Arduino connection established")
 
 # ----------------------------
 # PETICIONES API
@@ -39,7 +40,6 @@ session = requests.Session()
 
 user_login = os.getenv("USER_LOGIN")
 password = os.getenv("PASSWORD")
-
 
 def list_user():
     try:
@@ -129,39 +129,32 @@ def manual_verification(code):
 
 # ----------------------------
 # COMUNICACION NFC
-# ----------------------------
+# ----------------------------    
 def operation_nfc(type, value):
-    global running
     global arduino_lock
+
     try:
+        with arduino_lock:
+            if type == "R":
+                arduino.write(b"READ\n")
+            elif type == "W":
+                arduino.write(f"WRITE:{value}\n".encode())
+
         while running:
             with arduino_lock:
-                arduino.reset_input_buffer()
+                if arduino.in_waiting:
+                    linea = arduino.readline().decode(errors="ignore").strip()
+                    return linea
 
-                if type == "R":
-                    arduino.write(b"READ\n")
+            time.sleep(0.05)
 
-                elif type == "W":
-                    arduino.write(f"WRITE:{value}\n".encode())
-
-            start = time.time()
-
-            while time.time() - start < 0.5:
-                if not running:
-                    return "TERMINATE"
-
-                with arduino_lock:
-                    if arduino.in_waiting:
-                        linea = arduino.readline().decode(errors="ignore").strip()
-                        return linea
-
-                time.sleep(0.02)
-
-            time.sleep(0.1)
     except Exception as e:
         logging.error("Error NFC: %s", e)
         return "ERROR_NFC"
 
+def close_nfc():
+    with arduino_lock:
+        arduino.write(b"STOP\n")
 
 def error_nfc():
     with arduino_lock:
@@ -170,7 +163,7 @@ def error_nfc():
 
 def started_nfc():
     with arduino_lock:
-        arduino.write(b"STARTED\n")
+        arduino.write(b"RESET\n")
 
 
 # ----------------------------
@@ -210,6 +203,7 @@ def window_write():
         def close():
             global running
             running = False
+            close_nfc()
             window.destroy()
 
         window.protocol("WM_DELETE_WINDOW", close)
@@ -324,6 +318,7 @@ def window_read():
             global running
             running = False
             progress.stop()
+            close_nfc()
             window.destroy()
 
         window.protocol("WM_DELETE_WINDOW", close)
@@ -351,7 +346,6 @@ def window_read():
                     logging.info("Response verification: %s", response)
 
                     if "ERROR" in response:
-                        time.sleep(2)
                         window.after(
                             0, lambda r=response: label.configure(text=f"{r} ❌"))
                         error_nfc()
@@ -380,6 +374,15 @@ btn_read = ctk.CTkButton(app, text="Leer NFC", width=200, height=50,
 btn_read.pack(pady=10)
 
 started_nfc()
+
+time.sleep(2)
+
+arduino.reset_input_buffer()
+arduino.reset_output_buffer()
+
+logging.info("Arduino buffer reset")
+
+time.sleep(1)
 
 window_read()
 
