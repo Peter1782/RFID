@@ -20,6 +20,7 @@ enum Mode {
   WRITE_MODE
 };
 
+unsigned long lastResetTime = 0;
 Mode currentMode = IDLE;
 char writeData[32];
 
@@ -35,6 +36,11 @@ void setup() {
 
 bool waitForCard() {
   return (mfrc522.PICC_IsNewCardPresent() && mfrc522.PICC_ReadCardSerial());
+}
+
+void resetRc() {
+  mfrc522.PCD_Reset();
+  mfrc522.PCD_Init();
 }
 
 void beep(int times){
@@ -157,6 +163,11 @@ void handleSerial() {
 }
 
 void loop() {
+  if (millis() - lastResetTime > 60000) {
+    resetRc();
+    lastResetTime = millis();
+  }
+
   handleSerial();
 
   if (currentMode == READ_MODE) {
@@ -166,5 +177,5 @@ void loop() {
     writeBlock(writeData);
   }
 
-  delay(5);
+  delay(100);
 }
